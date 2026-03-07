@@ -23,6 +23,8 @@ const userModels = new Map();
 // Per-user active conversation ID (for --resume)
 const activeConversations = new Map();
 
+n// Per-user token usage tracking
+const userUsage = new Map();
 // Claude data directory
 const CLAUDE_DIR = path.join(
   process.env.USERPROFILE || process.env.HOME || "",
@@ -335,13 +337,17 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
+
   if (userMessage === "!usage") {
-    try {
-      const output = await runClaudeCommand(["usage"]);
-      await message.reply(output || "No usage data available.");
-    } catch (err) {
-      await message.reply(`Failed to get usage: ${err.message}`);
-    }
+    const u = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
+    await message.reply([
+      "**Session Token Usage:**",
+      `Input tokens: ${u.input.toLocaleString()}`,
+      `Output tokens: ${u.output.toLocaleString()}`,
+      `Total tokens: ${u.total.toLocaleString()}`,
+      "",
+      "_(Resets when bot restarts)_",
+    ].join("\n"));
     return;
   }
 
@@ -368,7 +374,7 @@ client.on(Events.MessageCreate, async (message) => {
         "`!cd <path>` - Set Claude's working directory",
         "`!pwd` - Show current working directory",
         "`!model <name>` - Switch model (sonnet, opus, haiku)",
-        "`!usage` - Show API usage",
+        "`!usage` - Show session token usage",
         "`!help` - Show this help message",
       ].join("\n")
     );
@@ -432,21 +438,6 @@ process.on("SIGHUP", cleanup);
 // Strip CLAUDECODE env var so child processes don't think they're nested
 const cleanEnv = { ...process.env, CLAUDECODE: "" };
 
-function runClaudeCommand(args) {
-  return new Promise((resolve, reject) => {
-    const cmd = "claude " + args.join(" ");
-    const child = spawn(cmd, [], { shell: true, env: cleanEnv });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d.toString()));
-    child.stderr.on("data", (d) => (stderr += d.toString()));
-    child.on("close", (code) => {
-      if (code !== 0) reject(new Error(stderr || `Exited with code ${code}`));
-      else resolve(stdout.trim());
-    });
-    child.on("error", (err) => reject(err));
-  });
-}
 
 /**
  * Call Claude with stream-json output and update Discord message in real-time.
@@ -603,6 +594,31 @@ function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) 
           if (event.result) resultText = event.result;
           conversationId = event.conversation_id || conversationId;
           currentStatus = "";
+          if (event.usage) {
+            const prev = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
+            prev.input += event.usage.input_tokens || 0;
+            prev.output += event.usage.output_tokens || 0;
+            prev.total += (event.usage.input_tokens || 0) + (event.usage.output_tokens || 0);
+            userUsage.set(message.author.id, prev);
+          }
+          break;
+
+        case "message_start":
+          if (event.message && event.message.usage) {
+            const prev = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
+            prev.input += event.message.usage.input_tokens || 0;
+            prev.total += event.message.usage.input_tokens || 0;
+            userUsage.set(message.author.id, prev);
+          }
+          break;
+
+        case "message_delta":
+          if (event.usage) {
+            const prev = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
+            prev.output += event.usage.output_tokens || 0;
+            prev.total += event.usage.output_tokens || 0;
+            userUsage.set(message.author.id, prev);
+          }
           break;
       }
     }
@@ -690,14 +706,6 @@ function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) 
       reject(new Error(`Failed to start Claude: ${err.message}`));
     });
 
-    // 5 minute timeout
-    setTimeout(() => {
-      if (!finished) {
-        finished = true;
-        child.kill();
-        reject(new Error("Claude timed out after 5 minutes"));
-      }
-    }, 300_000);
   });
 }
 
