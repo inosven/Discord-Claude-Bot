@@ -16,11 +16,33 @@ A Discord bot that acts as a remote terminal for [Claude Code CLI](https://docs.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) v18+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated (`npm install -g @anthropic-ai/claude-code`)
 - A Discord bot token
 
-## Setup
+## Quick Start (Pre-built Binary)
+
+Download the latest binary from [Releases](https://github.com/inosven/Discord-Claude-Bot/releases):
+
+| Platform | File |
+|----------|------|
+| Windows x64 | `discord-claude-bot-win.exe` |
+| macOS x64 (Intel / Rosetta 2) | `discord-claude-bot-macos` |
+
+1. [Create a Discord Bot](#create-a-discord-bot) and get your token
+2. Create a `.env` file in the same folder as the binary:
+   ```env
+   DISCORD_BOT_TOKEN=your-actual-token-here
+   DISCORD_CHANNEL_ID=your-channel-id  # optional
+   ```
+3. Run the binary:
+   - **Windows:** Double-click `discord-claude-bot-win.exe` or run it from terminal
+   - **macOS:** `chmod +x discord-claude-bot-macos && ./discord-claude-bot-macos`
+
+> **Note:** The macOS x64 binary runs on Apple Silicon Macs via Rosetta 2.
+
+## Setup (From Source)
+
+Requires [Node.js](https://nodejs.org/) v18+ in addition to the prerequisites above.
 
 ### 1. Clone and install
 
@@ -68,6 +90,19 @@ You should see:
 Logged in as YourBot#1234
 Bot is in 1 server(s)
 ```
+
+## Building Binaries
+
+To build standalone executables yourself:
+
+```bash
+npm install
+npm run build        # builds both Windows and macOS
+npm run build:win    # Windows only
+npm run build:mac    # macOS only
+```
+
+Output files are placed in `dist/`.
 
 ## Commands
 

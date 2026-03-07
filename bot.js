@@ -1,3 +1,6 @@
+const path = require("path");
+// Load .env from next to the executable (for compiled binaries), then fall back to cwd
+require("dotenv").config({ path: path.join(path.dirname(process.execPath), ".env") });
 require("dotenv").config();
 const {
   Client,
@@ -9,7 +12,6 @@ const {
 } = require("discord.js");
 const { spawn } = require("child_process");
 const fs = require("fs");
-const path = require("path");
 
 // Per-user request queue to ensure sequential processing (Claude sessions lock)
 const userQueues = new Map();
@@ -23,7 +25,7 @@ const userModels = new Map();
 // Per-user active conversation ID (for --resume)
 const activeConversations = new Map();
 
-n// Per-user token usage tracking
+// Per-user token usage tracking
 const userUsage = new Map();
 // Claude data directory
 const CLAUDE_DIR = path.join(
@@ -360,6 +362,10 @@ client.on(Events.MessageCreate, async (message) => {
       );
       return;
     }
+    if (!/^[a-zA-Z0-9._-]+$/.test(model)) {
+      await message.reply("Invalid model name. Use alphanumeric characters, dots, hyphens, or underscores only.");
+      return;
+    }
     userModels.set(message.author.id, model);
     await message.reply(`Model set to: \`${model}\``);
     return;
@@ -446,15 +452,15 @@ function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) 
   return new Promise(async (resolve, reject) => {
     const cwd = userCwd || process.env.CLAUDE_WORKING_DIR || process.cwd();
 
-    let cmd = "claude -p --dangerously-skip-permissions --verbose --output-format stream-json";
-    if (activeConvId) cmd += ` --resume ${activeConvId}`;
-    if (userModel) cmd += ` --model ${userModel}`;
+    const args = ["-p", "--dangerously-skip-permissions", "--verbose", "--output-format", "stream-json"];
+    if (activeConvId) args.push("--resume", activeConvId);
+    if (userModel) args.push("--model", userModel);
 
     console.log(
       `[${message.author.id}] conv=${activeConvId || "new"} cwd=${cwd} prompt="${prompt.substring(0, 80)}${prompt.length > 80 ? "..." : ""}"`
     );
 
-    const child = spawn(cmd, [], { shell: true, cwd, env: cleanEnv });
+    const child = spawn("claude", args, { cwd, env: cleanEnv, shell: true });
     activeChildren.add(child);
     child.stdin.write(prompt);
     child.stdin.end();
@@ -603,23 +609,8 @@ function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) 
           }
           break;
 
-        case "message_start":
-          if (event.message && event.message.usage) {
-            const prev = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
-            prev.input += event.message.usage.input_tokens || 0;
-            prev.total += event.message.usage.input_tokens || 0;
-            userUsage.set(message.author.id, prev);
-          }
-          break;
-
-        case "message_delta":
-          if (event.usage) {
-            const prev = userUsage.get(message.author.id) || { input: 0, output: 0, total: 0 };
-            prev.output += event.usage.output_tokens || 0;
-            prev.total += event.usage.output_tokens || 0;
-            userUsage.set(message.author.id, prev);
-          }
-          break;
+        // message_start and message_delta usage is tracked by the result event
+        // to avoid double-counting
       }
     }
 

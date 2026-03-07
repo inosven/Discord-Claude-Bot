@@ -16,11 +16,33 @@
 
 ## 前置条件
 
-- [Node.js](https://nodejs.org/) v18+
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安装并完成认证（`npm install -g @anthropic-ai/claude-code`）
 - 一个 Discord Bot Token
 
-## 安装
+## 快速开始（预编译二进制文件）
+
+从 [Releases](https://github.com/inosven/Discord-Claude-Bot/releases) 下载最新版本：
+
+| 平台 | 文件 |
+|------|------|
+| Windows x64 | `discord-claude-bot-win.exe` |
+| macOS x64（Intel / Rosetta 2） | `discord-claude-bot-macos` |
+
+1. [创建 Discord Bot](#创建-discord-bot) 并获取 token
+2. 在二进制文件同目录下创建 `.env` 文件：
+   ```env
+   DISCORD_BOT_TOKEN=你的token
+   DISCORD_CHANNEL_ID=你的频道ID  # 可选
+   ```
+3. 运行：
+   - **Windows：** 双击 `discord-claude-bot-win.exe` 或在终端运行
+   - **macOS：** `chmod +x discord-claude-bot-macos && ./discord-claude-bot-macos`
+
+> **注意：** macOS x64 版本可通过 Rosetta 2 在 Apple Silicon Mac 上运行。
+
+## 从源码安装
+
+除上述前置条件外，还需要 [Node.js](https://nodejs.org/) v18+。
 
 ### 1. 克隆并安装
 
@@ -68,6 +90,17 @@ npm start
 Logged in as YourBot#1234
 Bot is in 1 server(s)
 ```
+
+## 自行构建二进制文件
+
+```bash
+npm install
+npm run build        # 同时构建 Windows 和 macOS
+npm run build:win    # 仅 Windows
+npm run build:mac    # 仅 macOS
+```
+
+输出文件在 `dist/` 目录下。
 
 ## 命令
 

@@ -1,10 +1,17 @@
 {
   "name": "discord-claude-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Chat with Claude Code from Discord",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "build": "npm run build:win && npm run build:mac",
+    "build:win": "pkg bot.js --target node18-win-x64 --output dist/discord-claude-bot-win.exe",
+    "build:mac": "pkg bot.js --target node18-macos-x64 --output dist/discord-claude-bot-macos"
+  },
+  "pkg": {
+    "assets": [],
+    "outputPath": "dist"
   },
   "keywords": [],
   "author": "",
@@ -12,7 +19,9 @@
   "type": "commonjs",
   "dependencies": {
     "discord.js": "^14.25.1",
-    "dotenv": "^17.3.1",
-    "uuid": "^13.0.0"
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.0.0"
   }
 }
