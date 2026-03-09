@@ -11,6 +11,7 @@ A Discord bot that acts as a remote terminal for [Claude Code CLI](https://docs.
 - **Resume conversations** — Pick up any previous Claude Code conversation from a dropdown menu
 - **Switch directories** — Work on different projects by changing the working directory
 - **Per-user sessions** — Each user gets their own independent Claude conversation
+- **Permission modes** — Switch between bypass, safe, edit, full, and plan modes per user
 - **Token usage tracking** — Track input/output tokens per session
 - **Graceful shutdown** — Kills all child Claude processes on exit
 
@@ -113,8 +114,23 @@ Output files are placed in `dist/`.
 | `!resume` | Pick a previous conversation to resume |
 | `!reset` | Start a fresh conversation |
 | `!model <name>` | Switch model (sonnet, opus, haiku) |
+| `!mode [mode]` | Switch permission mode (see below) |
 | `!usage` | Show session token usage |
 | `!help` | Show all commands |
+
+### Permission Modes
+
+Control what Claude is allowed to do via `!mode <mode>`:
+
+| Mode | Description |
+|------|-------------|
+| `bypass` | Skip all permission checks (default, uses `--dangerously-skip-permissions`) |
+| `safe` | Read-only tools (Read, Glob, Grep, ls) — everything else denied |
+| `edit` | Read + file edits (Read, Glob, Grep, Edit, Write) — no Bash |
+| `full` | Read + edit + Bash + Agent — almost everything allowed |
+| `plan` | Analysis-only mode — no modifications at all |
+
+Switching modes does not interrupt the current conversation. Non-bypass modes use `--permission-mode dontAsk` with `--allowedTools` to pre-authorize specific tools — unapproved tools are automatically denied without blocking.
 
 ## How it works
 

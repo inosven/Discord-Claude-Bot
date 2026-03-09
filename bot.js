@@ -22,6 +22,31 @@ const userCwds = new Map();
 // Per-user model override
 const userModels = new Map();
 
+// Per-user permission mode
+const userModes = new Map();
+const VALID_MODES = {
+  bypass: {
+    label: "bypass",
+    desc: "Skip all permission checks (dangerously-skip-permissions)",
+  },
+  safe: {
+    label: "safe",
+    desc: "Allow Read/Glob/Grep/LS only, deny everything else",
+  },
+  edit: {
+    label: "edit",
+    desc: "Allow read + file edits, deny Bash execution",
+  },
+  full: {
+    label: "full",
+    desc: "Allow read + edit + most Bash commands",
+  },
+  plan: {
+    label: "plan",
+    desc: "Read-only analysis mode, no modifications",
+  },
+};
+
 // Per-user active conversation ID (for --resume)
 const activeConversations = new Map();
 
@@ -371,6 +396,32 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
+  if (userMessage.startsWith("!mode")) {
+    const mode = userMessage.slice(5).trim().toLowerCase();
+    if (!mode) {
+      const current = userModes.get(message.author.id) || "bypass";
+      const lines = [
+        `**Current mode: \`${current}\`**`,
+        "",
+        "Available modes:",
+      ];
+      for (const [key, info] of Object.entries(VALID_MODES)) {
+        lines.push(`\`!mode ${key}\` - ${info.desc}`);
+      }
+      await message.reply(lines.join("\n"));
+      return;
+    }
+    if (!VALID_MODES[mode]) {
+      await message.reply(
+        `Invalid mode \`${mode}\`. Valid: ${Object.keys(VALID_MODES).map(m => `\`${m}\``).join(", ")}`
+      );
+      return;
+    }
+    userModes.set(message.author.id, mode);
+    await message.reply(`Permission mode set to: **${mode}** - ${VALID_MODES[mode].desc}`);
+    return;
+  }
+
   if (userMessage === "!help") {
     await message.reply(
       [
@@ -380,6 +431,7 @@ client.on(Events.MessageCreate, async (message) => {
         "`!cd <path>` - Set Claude's working directory",
         "`!pwd` - Show current working directory",
         "`!model <name>` - Switch model (sonnet, opus, haiku)",
+        "`!mode <mode>` - Switch permission mode (bypass/safe/edit/full/plan)",
         "`!usage` - Show session token usage",
         "`!help` - Show this help message",
       ].join("\n")
@@ -399,6 +451,7 @@ client.on(Events.MessageCreate, async (message) => {
   enqueueForUser(message.author.id, async () => {
     const userCwd = userCwds.get(message.author.id);
     const userModel = userModels.get(message.author.id);
+    const userMode = userModes.get(message.author.id) || "bypass";
     const activeConvId = activeConversations.get(message.author.id);
 
     try {
@@ -407,7 +460,8 @@ client.on(Events.MessageCreate, async (message) => {
         userMessage,
         userCwd,
         userModel,
-        activeConvId
+        activeConvId,
+        userMode
       );
 
       if (conversationId) {
@@ -448,16 +502,31 @@ const cleanEnv = { ...process.env, CLAUDECODE: "" };
 /**
  * Call Claude with stream-json output and update Discord message in real-time.
  */
-function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) {
+function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId, permMode) {
   return new Promise(async (resolve, reject) => {
     const cwd = userCwd || process.env.CLAUDE_WORKING_DIR || process.cwd();
 
-    const args = ["-p", "--dangerously-skip-permissions", "--verbose", "--output-format", "stream-json"];
+    const args = ["-p", "--verbose", "--output-format", "stream-json"];
+
+    // Permission mode handling
+    const mode = permMode || "bypass";
+    if (mode === "bypass") {
+      args.push("--dangerously-skip-permissions");
+    } else if (mode === "plan") {
+      args.push("--permission-mode", "plan");
+    } else if (mode === "safe") {
+      args.push("--permission-mode", "dontAsk", "--allowedTools", "Read,Glob,Grep,Bash(ls *)");
+    } else if (mode === "edit") {
+      args.push("--permission-mode", "dontAsk", "--allowedTools", "Read,Glob,Grep,Edit,Write,Bash(ls *)");
+    } else if (mode === "full") {
+      args.push("--permission-mode", "dontAsk", "--allowedTools", "Read,Glob,Grep,Edit,Write,Bash,Agent");
+    }
+
     if (activeConvId) args.push("--resume", activeConvId);
     if (userModel) args.push("--model", userModel);
 
     console.log(
-      `[${message.author.id}] conv=${activeConvId || "new"} cwd=${cwd} prompt="${prompt.substring(0, 80)}${prompt.length > 80 ? "..." : ""}"`
+      `[${message.author.id}] mode=${mode} conv=${activeConvId || "new"} cwd=${cwd} prompt="${prompt.substring(0, 80)}${prompt.length > 80 ? "..." : ""}"`
     );
 
     const child = spawn("claude", args, { cwd, env: cleanEnv, shell: true });
@@ -659,8 +728,12 @@ function callClaudeStreaming(message, prompt, userCwd, userModel, activeConvId) 
 
       if (code !== 0) {
         if (replyMsg) {
+          let errMsg = `Something went wrong: ${stderr || `exit code ${code}`}`;
+          if (mode !== "bypass") {
+            errMsg += `\n\n_Current permission mode: \`${mode}\`. Use \`!mode bypass\` for full access._`;
+          }
           await replyMsg
-            .edit(`Something went wrong: ${stderr || `exit code ${code}`}`.substring(0, 2000))
+            .edit(errMsg.substring(0, 2000))
             .catch(() => {});
         }
         reject(new Error(stderr || `Claude exited with code ${code}`));

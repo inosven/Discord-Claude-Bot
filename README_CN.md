@@ -11,6 +11,7 @@
 - **恢复对话** — 从下拉菜单中选择任意历史 Claude Code 对话继续
 - **切换目录** — 通过切换工作目录来操作不同项目
 - **多用户会话** — 每个用户有独立的 Claude 对话
+- **权限模式** — 每个用户可切换 bypass、safe、edit、full、plan 五种权限模式
 - **Token 用量追踪** — 追踪每个 session 的输入/输出 token 数
 - **优雅退出** — 退出时自动终止所有 Claude 子进程
 
@@ -111,8 +112,23 @@ npm run build:mac    # 仅 macOS
 | `!resume` | 选择历史对话恢复 |
 | `!reset` | 开始新对话 |
 | `!model <名称>` | 切换模型（sonnet、opus、haiku） |
+| `!mode [模式]` | 切换权限模式（见下方） |
 | `!usage` | 显示 session token 用量 |
 | `!help` | 显示所有命令 |
+
+### 权限模式
+
+通过 `!mode <模式>` 控制 Claude 的操作权限：
+
+| 模式 | 说明 |
+|------|------|
+| `bypass` | 跳过所有权限检查（默认，使用 `--dangerously-skip-permissions`） |
+| `safe` | 仅允许读取（Read、Glob、Grep、ls），其他全部拒绝 |
+| `edit` | 允许读取 + 编辑文件（Read、Glob、Grep、Edit、Write），不允许执行命令 |
+| `full` | 允许读取 + 编辑 + Bash + Agent，几乎全部放开 |
+| `plan` | 纯分析模式，不能做任何修改 |
+
+切换模式不会打断当前对话。非 bypass 模式使用 `--permission-mode dontAsk` 配合 `--allowedTools` 预授权指定工具，未授权工具会被自动拒绝，不会阻塞。
 
 ## 工作原理
 
